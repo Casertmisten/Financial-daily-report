@@ -29,14 +29,13 @@ class NewsCollector(BaseCollector):
 
     def collect(self) -> list[dict]:
         """Collect news from all configured sources.
+·        返回值：
+            一个新闻条目列表，其中每个条目是一个包含新闻数据的字典，
+            包含 'title'、'content'、'time' 等键。
 
-        Returns:
-            A list of news items, where each item is a dictionary containing
-            news data with keys like 'title', 'content', 'time', etc.
-
-        Note:
-            If all sources fail, returns empty list instead of raising exception.
-            This allows the system to generate a simple report even without data.
+        注意：
+            如果所有数据源都失败，返回空列表而不是抛出异常。
+            这样即使没有数据，系统也能生成简单的报告。
         """
         all_news = []
 
