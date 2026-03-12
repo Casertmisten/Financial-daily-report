@@ -93,8 +93,36 @@ uv run python src/main.py
 
 ### Embedding 配置
 - `EMBEDDING_BASE_URL`: Embedding服务的基础URL
+- `EMBEDDING_API_TYPE`: Embedding服务类型（`openai` 或 `ollama`，默认：`openai`）
 - `EMBEDDING_API_KEY`: Embedding服务的API密钥（可选）
 - `EMBEDDING_MODEL`: 用于向量嵌入的模型名称
+
+**支持的 Embedding 服务：**
+
+| 服务类型 | EMBEDDING_BASE_URL | EMBEDDING_API_TYPE | 示例模型 |
+|---------|-------------------|-------------------|----------|
+| **OpenAI** | `https://api.openai.com/v1` | `openai` | `text-embedding-3-small` |
+| **Ollama** | `http://localhost:11434` | `ollama` | `qwen3-embedding:4b-q4_K_M` |
+| **vLLM** | `http://localhost:11434/v1` | `openai` | `your-model-name` |
+
+**配置示例：**
+
+```bash
+# OpenAI
+EMBEDDING_BASE_URL=https://api.openai.com/v1
+EMBEDDING_API_TYPE=openai
+EMBEDDING_MODEL=text-embedding-3-small
+
+# Ollama
+EMBEDDING_BASE_URL=http://localhost:11434
+EMBEDDING_API_TYPE=ollama
+EMBEDDING_MODEL=qwen3-embedding:4b-q4_K_M
+
+# vLLM
+EMBEDDING_BASE_URL=http://localhost:11434/v1
+EMBEDDING_API_TYPE=openai
+EMBEDDING_MODEL=bge-large-zh-v1.5
+```
 
 ### 定时任务配置
 - `PRE_MARKET_TIME`: 开盘前报告生成时间（格式：HH:MM）
