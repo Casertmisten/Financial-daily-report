@@ -12,7 +12,7 @@ from src.storage.database import database
 from src.rag.vector_store import vector_store
 from src.rag.retriever import rag_retriever
 from src.generators.llm_client import llm_client
-from config.prompts import DAILY_REPORT_PROMPT
+from config.prompts import PRE_MARKET_PROMPT, MID_CLOSE_PROMPT, AFTER_CLOSE_PROMPT
 from config.settings import config
 from pathlib import Path
 from datetime import datetime
@@ -262,7 +262,8 @@ def pre_market_generate_node(state: ReportState) -> ReportState:
     # 使用当前时间
     current_date = datetime.now().strftime("%Y-%m-%d")
 
-    prompt = DAILY_REPORT_PROMPT.format(
+    prompt = PRE_MARKET_PROMPT.format(
+        current_date=current_date,
         news_data=news_summary,
         market_data=market_summary,
         historical_context=state["context"]
@@ -300,7 +301,8 @@ def mid_close_generate_node(state: ReportState) -> ReportState:
     # 使用当前时间
     current_date = datetime.now().strftime("%Y-%m-%d")
 
-    prompt = DAILY_REPORT_PROMPT.format(
+    prompt = MID_CLOSE_PROMPT.format(
+        current_date=current_date,
         news_data=news_summary,
         market_data=market_summary,
         historical_context=state["context"]
@@ -338,7 +340,8 @@ def after_close_generate_node(state: ReportState) -> ReportState:
     # 使用当前时间
     current_date = datetime.now().strftime("%Y-%m-%d")
 
-    prompt = DAILY_REPORT_PROMPT.format(
+    prompt = AFTER_CLOSE_PROMPT.format(
+        current_date=current_date,
         news_data=news_summary,
         market_data=market_summary,
         historical_context=state["context"]
