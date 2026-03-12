@@ -1058,18 +1058,6 @@ def after_close_generate_node(state: ReportState) -> ReportState:
     news_summary = _format_news_enriched(state["enriched_news"], focus="analysis")
 ```
 
-找到 `after_close_generate_node` 函数，将：
-
-```python
-news_summary = _format_news(state["cleaned_news"], focus="analysis")
-```
-
-改为：
-
-```python
-news_summary = _format_news_enriched(state["enriched_news"], focus="analysis")
-```
-
 - [ ] **Step 4: 运行工作流测试确保没有破坏**
 
 ```bash
@@ -1375,11 +1363,70 @@ else:
 
 预期: ✓ news_analysis 表已创建
 
-- [ ] **Step 5: 提交更改**
+- [ ] **Step 6: 添加 save_enriched_news 方法保存完整流程**
+
+为了方便使用，添加一个方法来同时保存新闻和分析结果（需要先在文件顶部添加 `import json`）：
+
+```python
+def save_enriched_news(self, news_list: List[Dict], analysis_list: List[Dict]) -> Dict[str, List[int]]:
+    """
+    保存新闻和分析结果（完整流程）
+
+    Args:
+        news_list: 新闻列表（来自 cleaned_news）
+        analysis_list: 分析结果列表（来自 enriched_news）
+
+    Returns:
+        {
+            'news_ids': [插入的新闻 ID 列表],
+            'analysis_ids': [插入的分析 ID 列表]
+        }
+
+    注意：
+        news_list 和 analysis_list 应该长度相同且一一对应
+        自动将 news_id 关联到 analysis_list 中的对应项
+    """
+    # 先保存新闻
+    news_ids = self.save_news(news_list)
+
+    # 将 news_id 添加到分析结果中
+    for i, analysis in enumerate(analysis_list):
+        if i < len(news_ids):
+            analysis['news_id'] = news_ids[i]
+
+    # 保存分析结果
+    analysis_ids = self.save_news_analysis(analysis_list)
+
+    return {
+        'news_ids': news_ids,
+        'analysis_ids': analysis_ids
+    }
+```
+
+- [ ] **Step 7: 验证数据库创建正确**
+
+```bash
+uv run python -c "
+from src.storage.database import database
+import sqlite3
+# 检查表是否存在
+cursor = database.conn.cursor()
+cursor.execute(\"SELECT name FROM sqlite_master WHERE type='table' AND name='news_analysis'\")
+result = cursor.fetchone()
+if result:
+    print('✓ news_analysis 表已创建')
+else:
+    print('✗ news_analysis 表未创建')
+"
+```
+
+预期: ✓ news_analysis 表已创建
+
+- [ ] **Step 8: 提交更改**
 
 ```bash
 git add src/storage/database.py
-git commit -m "feat: add news_analysis table and save_news_analysis method"
+git commit -m "feat: add news_analysis table and save_enriched_news method"
 ```
 
 ---
