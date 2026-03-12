@@ -1,19 +1,10 @@
 """主程序入口，负责协调整个日报生成流程"""
 from loguru import logger
-from src.collectors.news_collector import NewsCollector
-from src.collectors.market_collector import MarketCollector
-from src.processors.cleaner import RuleCleaner, LLMCleaner
-from src.rag.embeddings import embedding_generator
-from src.rag.vector_store import vector_store
-from src.rag.retriever import rag_retriever
-from src.generators.report_gen import report_generator
-from src.storage.database import database
-from datetime import datetime
-from pathlib import Path
-from config.settings import config
-from src.utils.exceptions import DataCollectionError, ReportGenerationError
+from src.workflow.graph import report_graph
 from src.generators.llm_client import llm_client
-import hashlib
+from src.utils.exceptions import ReportGenerationError
+from config.settings import config
+from datetime import datetime
 
 
 def generate_daily_report(report_type: str = "after_close") -> str:
@@ -47,127 +38,26 @@ def generate_daily_report(report_type: str = "after_close") -> str:
 
     logger.success("✓ LLM连通性测试通过")
 
+    # 初始状态
+    initial_state = {
+        "report_type": report_type,
+        "news_data": [],
+        "market_data": {},
+        "cleaned_news": [],
+        "context": "",
+        "report": "",
+        "errors": []
+    }
+
     try:
-        # 1. 数据采集
-        logger.info("=== 步骤1: 数据采集 ===")
-        try:
-            news_collector = NewsCollector()
-            market_collector = MarketCollector()
-
-            news_data = news_collector.collect()
-            market_data = market_collector.collect()
-
-            # 检查数据采集结果
-            news_count = len(news_data)
-            market_count = sum(1 for v in market_data.values() if v)
-
-            if news_count == 0 and market_count == 0:
-                logger.warning("⚠️ 数据采集完全失败，将生成基础报告框架")
-            else:
-                logger.info(f"✓ 数据采集完成 (新闻: {news_count}条, 市场: {market_count}/5项)")
-        except Exception as e:
-            logger.error(f"数据采集失败: {e}")
-            # 不再抛出异常，而是使用空数据继续
-            news_data = []
-            market_data = {}
-
-        # 2. 规则清洗
-        logger.info("=== 步骤2: 规则清洗 ===")
-        rule_cleaner = RuleCleaner()
-        news_data = rule_cleaner.clean(news_data)
-
-        # 3. LLM智能清洗（跳过如果没有新闻）
-        logger.info("=== 步骤3: LLM智能清洗 ===")
-        if news_data:
-            try:
-                llm_cleaner = LLMCleaner()
-                news_data = llm_cleaner.clean(news_data)
-                logger.info(f"✓ LLM清洗完成，保留 {len(news_data)} 条有效新闻")
-            except Exception as e:
-                logger.warning(f"LLM清洗失败，使用规则清洗结果: {e}")
-
-        # 4. 存储新闻到SQLite
-        logger.info("=== 步骤4: 存储新闻 ===")
-        try:
-            if news_data:
-                database.save_news(news_data)
-                logger.info(f"✓ 保存 {len(news_data)} 条新闻到数据库")
-        except Exception as e:
-            logger.warning(f"新闻存储失败: {e}")
-
-        # 5. 向量化并存储到Chroma
-        logger.info("=== 步骤5: 向量化存储 ===")
-        try:
-            if news_data:
-                docs = []
-                for item in news_data:
-                    # 生成唯一ID
-                    content_str = f"{item['title']}_{item.get('content', '')}"
-                    doc_id = hashlib.md5(content_str.encode()).hexdigest()
-
-                    docs.append({
-                        'id': doc_id,
-                        'text': f"{item['title']}\n{item.get('cleaned_content', item.get('content', ''))}",
-                        'metadata': {
-                            'source': item.get('source', ''),
-                            'time': item.get('time', ''),
-                            'title': item['title']
-                        }
-                    })
-
-                if docs:
-                    vector_store.add_documents(docs)
-                    logger.info(f"✓ 向量化存储 {len(docs)} 条文档")
-        except Exception as e:
-            logger.warning(f"向量存储失败: {e}")
-
-        # 6. RAG检索相关历史
-        logger.info("=== 步骤6: RAG检索 ===")
-        context = ""
-        try:
-            # 根据今日新闻关键词检索
-            if news_data:
-                # 使用第一条新闻的标题作为查询
-                context = rag_retriever.retrieve(news_data[0]['title'])
-                logger.info("✓ RAG检索完成")
-        except Exception as e:
-            logger.warning(f"RAG检索失败，将不使用历史参考: {e}")
-
-        # 7. 生成日报
-        logger.info("=== 步骤7: 生成日报 ===")
-        try:
-            report = report_generator.generate(news_data, market_data, context)
-        except Exception as e:
-            logger.error(f"日报生成失败: {e}")
-            raise ReportGenerationError(f"日报生成失败: {e}") from e
-
-        # 8. 保存日报
-        logger.info("=== 步骤8: 保存日报 ===")
-        report_date = datetime.now().strftime("%Y-%m-%d")
-        try:
-            database.save_report(report_date, report_type, report)
-        except Exception as e:
-            logger.warning(f"日报保存到数据库失败: {e}")
-
-        # 保存到文件
-        try:
-            output_file = config.output_dir / f"{report_date}_{report_type}.md"
-            with open(output_file, 'w', encoding='utf-8') as f:
-                f.write(report)
-            logger.success(f"日报已保存: {output_file}")
-        except Exception as e:
-            logger.warning(f"日报保存到文件失败: {e}")
+        # 执行工作流图
+        result = report_graph.invoke(initial_state)
 
         logger.success(f"日报生成完成: {report_type}")
-        return report
+        return result["report"]
 
-    except DataCollectionError as e:
-        logger.error(f"数据采集失败: {e}")
-        raise ReportGenerationError("数据采集失败") from e
-    except ReportGenerationError:
-        raise
     except Exception as e:
-        logger.critical(f"未预期错误: {e}")
+        logger.critical(f"工作流执行失败: {e}")
         raise ReportGenerationError(f"日报生成失败: {e}") from e
 
 
@@ -176,7 +66,6 @@ def main():
     import sys
 
     if len(sys.argv) > 1 and sys.argv[1] == "run":
-        # 立即运行一次
         report_type = sys.argv[2] if len(sys.argv) > 2 else "after_close"
         try:
             generate_daily_report(report_type)
