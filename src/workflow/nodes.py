@@ -124,23 +124,32 @@ def analyze_node(state: ReportState) -> ReportState:
 def store_node(state: ReportState) -> ReportState:
     """存储到 SQLite
 
-    将清洗后的新闻保存到数据库
+    将清洗后的新闻和分析结果保存到数据库
 
     Args:
-        state: 当前状态，包含 cleaned_news
+        state: 当前状态，包含 cleaned_news 和 enriched_news
 
     Returns:
         未修改的状态
     """
     logger.info("=== 存储新闻 ===")
 
-    if state["cleaned_news"]:
-        try:
+    if not state["cleaned_news"]:
+        logger.info("无新闻需要存储")
+        return state
+
+    try:
+        # 如果有 enriched_news，使用 save_enriched_news 同时保存新闻和分析结果
+        if state.get("enriched_news"):
+            result = database.save_enriched_news(state["cleaned_news"], state["enriched_news"])
+            logger.info(f"✓ 保存新闻: {len(result['news_ids'])} 条, 分析: {len(result['analysis_ids'])} 条")
+        else:
+            # 向后兼容：只保存基础新闻
             database.save_news(state["cleaned_news"])
             logger.info(f"✓ 保存 {len(state['cleaned_news'])} 条")
-        except Exception as e:
-            logger.error(f"保存新闻失败: {e}")
-            # 不中断流程，继续执行
+    except Exception as e:
+        logger.error(f"保存新闻失败: {e}")
+        # 不中断流程，继续执行
 
     return state
 

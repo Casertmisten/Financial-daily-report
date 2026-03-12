@@ -375,3 +375,82 @@ def test_format_news_enriched_respects_limit():
     # focus="analysis" 应该限制为 20 条
     # 每条新闻 2 行（标题行 + 重要性行）
     assert len([l for l in lines if l.startswith('-')]) <= 20
+
+
+def test_store_node_saves_enriched_news(monkeypatch):
+    """测试 store_node 保存 enriched_news 到数据库"""
+    from src.workflow.nodes import store_node
+    from unittest.mock import Mock
+    
+    saved_calls = []
+    
+    def mock_save_enriched_news(cleaned, enriched):
+        saved_calls.append({'cleaned': cleaned, 'enriched': enriched})
+        return {'news_ids': [1, 2], 'analysis_ids': [1, 2]}
+    
+    monkeypatch.setattr('src.storage.database.database.save_enriched_news', mock_save_enriched_news)
+    
+    cleaned_news = [
+        {'title': '新闻1', 'content': '内容1'},
+        {'title': '新闻2', 'content': '内容2'}
+    ]
+    
+    enriched_news = [
+        {'title': '新闻1', 'event_type': '财报类', 'related_stocks': {'direct': [], 'indirect': [], 'concepts': []}},
+        {'title': '新闻2', 'event_type': '其他', 'related_stocks': {'direct': [], 'indirect': [], 'concepts': []}}
+    ]
+    
+    state = {
+        'report_type': 'after_close',
+        'news_data': [],
+        'market_data': {},
+        'cleaned_news': cleaned_news,
+        'enriched_news': enriched_news,
+        'context': '',
+        'report': '',
+        'errors': []
+    }
+    
+    result = store_node(state)
+    
+    assert len(saved_calls) == 1
+    assert saved_calls[0]['cleaned'] == cleaned_news
+    assert saved_calls[0]['enriched'] == enriched_news
+
+
+def test_store_node_fallback_to_basic_save(monkeypatch):
+    """测试 store_node 在没有 enriched_news 时回退到基础保存"""
+    from src.workflow.nodes import store_node
+    
+    saved_basic = []
+    saved_enriched = []
+    
+    def mock_save_news(news_list):
+        saved_basic.append(news_list)
+    
+    def mock_save_enriched_news(cleaned, enriched):
+        saved_enriched.append({'cleaned': cleaned, 'enriched': enriched})
+    
+    monkeypatch.setattr('src.storage.database.database.save_news', mock_save_news)
+    monkeypatch.setattr('src.storage.database.database.save_enriched_news', mock_save_enriched_news)
+    
+    cleaned_news = [
+        {'title': '新闻1', 'content': '内容1'}
+    ]
+    
+    state = {
+        'report_type': 'after_close',
+        'news_data': [],
+        'market_data': {},
+        'cleaned_news': cleaned_news,
+        'enriched_news': [],  # 空列表
+        'context': '',
+        'report': '',
+        'errors': []
+    }
+    
+    result = store_node(state)
+    
+    # 当 enriched_news 为空时，应该使用基础保存
+    assert len(saved_basic) == 1
+    assert len(saved_enriched) == 0
