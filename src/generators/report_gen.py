@@ -39,7 +39,10 @@ class ReportGenerator:
 
         try:
             report = self.client.chat(
-                messages=[{"role": "user", "content": prompt}],
+                messages=[
+                    {"role": "system", "content": "你是一位专业的中国金融分析师。请务必用中文回复所有内容，包括标题、分析、数据说明等。不要使用英文输出。"},
+                    {"role": "user", "content": prompt}
+                ],
                 temperature=0.7
             )
             logger.success("日报生成完成")
