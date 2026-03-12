@@ -50,7 +50,7 @@ This is a **financial daily report generation system** built with LangGraph. The
 
 The workflow is defined in `src/workflow/graph.py`:
 ```
-collect → clean → store → vectorize → rag → [route] → generate → save
+collect → clean → analyze → store → vectorize → rag → [route] → generate → save
 ```
 
 The `[route]` conditionally directs to one of three generation nodes based on `report_type`:
@@ -65,6 +65,7 @@ The `[route]` conditionally directs to one of three generation nodes based on `r
 - `news_data`: Raw news from collectors
 - `market_data`: Raw market data (indices, fund flows)
 - `cleaned_news`: Processed news with extracted entities/sentiment
+- `enriched_news`: Deep analysis results with event types and stock associations
 - `context`: RAG-retrieved historical context
 - `report`: Generated markdown report
 - `errors`: Error list
@@ -80,7 +81,15 @@ The `[route]` conditionally directs to one of three generation nodes based on `r
 1. `RuleCleaner`: HTML removal, deduplication (MD5 hash)
 2. `LLMCleaner`: Entity extraction, sentiment analysis, importance scoring (1-5), tagging
 
-The LLM cleaner extracts structured data per news item:
+**Deep Analysis** (`src/processors/analyzer.py`):
+- `HeavyAnalyzer`: Event extraction (6 predefined types), stock association (direct/indirect/concepts), intelligent merging of same-stock news
+- Adds `event_type`, `event_subtype`, `related_stocks` fields to enriched_news
+- Merges multiple news about same stock into single entry
+- Sorts by importance and stock relevance
+
+Event types: 财报类, 重组并购类, 政策影响类, 经营类, 风险类, 其他
+
+The cleaner extracts structured data per news item:
 ```python
 {
     'entities': [],      # Company names, people, etc.
@@ -91,13 +100,29 @@ The LLM cleaner extracts structured data per news item:
 }
 ```
 
-**Note**: Extracted entities/sentiment/importance are currently NOT passed to report generation prompts. This is the key gap for the "news information extraction" feature request.
+The analyzer adds:
+```python
+{
+    'event_type': '财报类',           # Event category
+    'event_subtype': '财报发布',       # Specific event
+    'related_stocks': {
+        'direct': ['600519.SH:贵州茅台'],    # Direct stocks
+        'indirect': ['白酒行业'],            # Industries
+        'concepts': ['白酒概念', '消费龙头']  # Concepts
+    }
+}
+```
 
 ### Report Generation (`src/workflow/nodes.py`)
 
-Generation nodes use `_format_news()` to prepare data for prompts. Current behavior:
-- Truncates content to 100 chars
-- Ignores extracted entities/sentiment/importance fields
+Generation nodes use `_format_news_enriched()` which includes:
+- Event type badges (e.g., [财报类], [政策影响类])
+- Sentiment icons (📈 positive, ➡️ neutral, 📉 negative)
+- Stock information (direct targets with codes)
+- Importance ratings (1-5)
+- Related concepts
+
+The enriched data provides deeper context for LLM to generate more insightful reports.
 - Passes only title + truncated content to LLM
 
 Prompts are in `config/prompts.py`:
