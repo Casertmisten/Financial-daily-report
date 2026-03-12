@@ -64,6 +64,37 @@ class NewsCollector(BaseCollector):
         logger.info(f"✓ 新闻采集完成，共获取 {len(all_news)} 条")
         return all_news
 
+    def _normalize_news_item(self, item: dict, source: str) -> dict:
+        """标准化新闻条目的字段名
+
+        将中文列名映射到英文列名
+
+        Args:
+            item: 原始新闻条目
+            source: 数据源名称
+
+        Returns:
+            标准化后的新闻条目
+        """
+        # 中文到英文的字段名映射
+        field_mapping = {
+            '标题': 'title',
+            '摘要': 'content',
+            '发布时间': 'time',
+            '时间': 'time',
+            '链接': 'link',
+            '内容': 'content',
+        }
+
+        normalized = {}
+        for key, value in item.items():
+            # 如果是中文字段名，映射到英文
+            english_key = field_mapping.get(key, key)
+            normalized[english_key] = value
+
+        normalized['source'] = source
+        return normalized
+
     def _collect_from_cjzc_em(self, all_news: list[dict]) -> None:
         """Collect news from 财经早餐 - 东财.
 
@@ -76,8 +107,8 @@ class NewsCollector(BaseCollector):
             if df is not None and not df.empty:
                 news_items = df.to_dict("records")
                 for item in news_items:
-                    item["source"] = "财经早餐-东财"
-                all_news.extend(news_items)
+                    normalized = self._normalize_news_item(item, "财经早餐-东财")
+                    all_news.append(normalized)
                 logger.info(f"Collected {len(news_items)} items from 财经早餐 - 东财")
         except Exception as e:
             logger.error(f"Failed to collect from 财经早餐 - 东财: {e}")
@@ -94,8 +125,8 @@ class NewsCollector(BaseCollector):
             if df is not None and not df.empty:
                 news_items = df.to_dict("records")
                 for item in news_items:
-                    item["source"] = "全球财经快讯-东财"
-                all_news.extend(news_items)
+                    normalized = self._normalize_news_item(item, "全球财经快讯-东财")
+                    all_news.append(normalized)
                 logger.info(f"Collected {len(news_items)} items from 全球财经快讯 - 东财")
         except Exception as e:
             logger.error(f"Failed to collect from 全球财经快讯 - 东财: {e}")
@@ -112,8 +143,8 @@ class NewsCollector(BaseCollector):
             if df is not None and not df.empty:
                 news_items = df.to_dict("records")
                 for item in news_items:
-                    item["source"] = "全球财经快讯-新浪"
-                all_news.extend(news_items)
+                    normalized = self._normalize_news_item(item, "全球财经快讯-新浪")
+                    all_news.append(normalized)
                 logger.info(f"Collected {len(news_items)} items from 全球财经快讯 - 新浪")
         except Exception as e:
             logger.error(f"Failed to collect from 全球财经快讯 - 新浪: {e}")
@@ -130,8 +161,8 @@ class NewsCollector(BaseCollector):
             if df is not None and not df.empty:
                 news_items = df.to_dict("records")
                 for item in news_items:
-                    item["source"] = "快讯-富途"
-                all_news.extend(news_items)
+                    normalized = self._normalize_news_item(item, "快讯-富途")
+                    all_news.append(normalized)
                 logger.info(f"Collected {len(news_items)} items from 快讯 - 富途")
         except Exception as e:
             logger.error(f"Failed to collect from 快讯 - 富途: {e}")
@@ -148,8 +179,8 @@ class NewsCollector(BaseCollector):
             if df is not None and not df.empty:
                 news_items = df.to_dict("records")
                 for item in news_items:
-                    item["source"] = "全球财经直播-同花顺"
-                all_news.extend(news_items)
+                    normalized = self._normalize_news_item(item, "全球财经直播-同花顺")
+                    all_news.append(normalized)
                 logger.info(f"Collected {len(news_items)} items from 全球财经直播 - 同花顺")
         except Exception as e:
             logger.error(f"Failed to collect from 全球财经直播 - 同花顺: {e}")
@@ -166,8 +197,8 @@ class NewsCollector(BaseCollector):
             if df is not None and not df.empty:
                 news_items = df.to_dict("records")
                 for item in news_items:
-                    item["source"] = "电报-财联社"
-                all_news.extend(news_items)
+                    normalized = self._normalize_news_item(item, "电报-财联社")
+                    all_news.append(normalized)
                 logger.info(f"Collected {len(news_items)} items from 电报 - 财联社")
         except Exception as e:
             logger.error(f"Failed to collect from 电报 - 财联社: {e}")
