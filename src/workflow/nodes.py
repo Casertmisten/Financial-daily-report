@@ -73,6 +73,54 @@ def clean_node(state: ReportState) -> ReportState:
     return {**state, "cleaned_news": cleaned}
 
 
+def analyze_node(state: ReportState) -> ReportState:
+    """深度分析节点
+
+    对清洗后的新闻进行事件抽取、标的关联、智能合并
+
+    Args:
+        state: 当前状态，包含 cleaned_news
+
+    Returns:
+        更新后的状态，包含 enriched_news
+    """
+    logger.info("=== 深度分析 ===")
+
+    if not state["cleaned_news"]:
+        logger.info("无新闻需要分析")
+        return {**state, "enriched_news": []}
+
+    try:
+        from src.processors.analyzer import HeavyAnalyzer
+        analyzer = HeavyAnalyzer()
+        enriched = analyzer.analyze(state["cleaned_news"])
+        logger.info(f"✓ 深度分析完成，保留 {len(enriched)} 条")
+
+        # 打印统计信息
+        event_types = {}
+        for news in enriched:
+            et = news.get('event_type', '其他')
+            event_types[et] = event_types.get(et, 0) + 1
+        logger.info(f"事件类型分布: {event_types}")
+
+        return {**state, "enriched_news": enriched}
+
+    except Exception as e:
+        logger.error(f"深度分析失败，使用 cleaned_news: {e}")
+        # 回退：将 cleaned_news 作为 enriched_news 返回
+        # 添加默认的分析字段
+        fallback = [
+            {
+                **news,
+                'event_type': '其他',
+                'event_subtype': '',
+                'related_stocks': {'direct': [], 'indirect': [], 'concepts': []}
+            }
+            for news in state["cleaned_news"]
+        ]
+        return {**state, "enriched_news": fallback}
+
+
 def store_node(state: ReportState) -> ReportState:
     """存储到 SQLite
 

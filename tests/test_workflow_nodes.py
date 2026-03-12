@@ -3,9 +3,11 @@
 使用 pytest 测试所有工作流节点函数的正确性。
 """
 import pytest
+from unittest.mock import Mock, patch
 from src.workflow.nodes import (
     collect_node,
     clean_node,
+    analyze_node,
     store_node,
     vectorize_node,
     rag_node,
@@ -215,3 +217,101 @@ def test_route_by_report_type():
     assert route_by_report_type({"report_type": "mid_close"}) == "mid_close_generate"
     assert route_by_report_type({"report_type": "after_close"}) == "after_close_generate"
     assert route_by_report_type({"report_type": "unknown"}) == "after_close_generate"  # 默认
+
+
+def test_analyze_node_with_news():
+    """测试 analyze_node 处理新闻"""
+    from src.workflow.nodes import analyze_node
+
+    cleaned_news = [
+        {
+            'title': '测试新闻',
+            'content': '测试内容',
+            'sentiment': 'neutral',
+            'importance': 3,
+            'source': 'test',
+            'time': '2024-01-01'
+        }
+    ]
+
+    state = {
+        'report_type': 'after_close',
+        'news_data': [],
+        'market_data': {},
+        'cleaned_news': cleaned_news,
+        'enriched_news': [],
+        'context': '',
+        'report': '',
+        'errors': []
+    }
+
+    # Mock HeavyAnalyzer
+    with patch('src.processors.analyzer.HeavyAnalyzer') as mock_analyzer_class:
+        mock_analyzer = Mock()
+        mock_analyzer.analyze.return_value = [
+            {
+                'title': '测试新闻',
+                'event_type': '其他',
+                'related_stocks': {'direct': [], 'indirect': [], 'concepts': []}
+            }
+        ]
+        mock_analyzer_class.return_value = mock_analyzer
+
+        result = analyze_node(state)
+
+    assert 'enriched_news' in result
+    assert len(result['enriched_news']) == 1
+
+
+def test_analyze_node_empty_news():
+    """测试 analyze_node 处理空新闻"""
+    from src.workflow.nodes import analyze_node
+
+    state = {
+        'report_type': 'after_close',
+        'news_data': [],
+        'market_data': {},
+        'cleaned_news': [],
+        'enriched_news': [],
+        'context': '',
+        'report': '',
+        'errors': []
+    }
+
+    result = analyze_node(state)
+
+    assert result['enriched_news'] == []
+
+
+def test_analyze_node_failure_fallback():
+    """测试 analyze_node 失败时回退到 cleaned_news"""
+    from src.workflow.nodes import analyze_node
+
+    cleaned_news = [
+        {
+            'title': '测试新闻',
+            'content': '测试内容',
+            'sentiment': 'neutral',
+            'importance': 3
+        }
+    ]
+
+    state = {
+        'report_type': 'after_close',
+        'news_data': [],
+        'market_data': {},
+        'cleaned_news': cleaned_news,
+        'enriched_news': [],
+        'context': '',
+        'report': '',
+        'errors': []
+    }
+
+    # Mock HeavyAnalyzer 抛出异常
+    with patch('src.processors.analyzer.HeavyAnalyzer', side_effect=Exception('Analysis failed')):
+        result = analyze_node(state)
+
+    # 应该回退到 cleaned_news 并添加默认字段
+    assert 'enriched_news' in result
+    assert len(result['enriched_news']) == 1
+    assert result['enriched_news'][0]['event_type'] == '其他'
