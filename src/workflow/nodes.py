@@ -90,10 +90,45 @@ def analyze_node(state: ReportState) -> ReportState:
         logger.info("无新闻需要分析")
         return {**state, "enriched_news": []}
 
+    # 检查数据库，只分析新新闻
+    from src.storage.database import database
+    import hashlib
+
+    new_news = []
+    skipped_count = 0
+
+    # 获取数据库中已有的新闻标题hash
+    cursor = database.conn.cursor()
+    cursor.execute("SELECT title, content FROM news")
+    existing_hashes = set()
+    for row in cursor.fetchall():
+        title, content = row
+        content_str = f"{title}{content or ''}"
+        content_hash = hashlib.md5(content_str.encode()).hexdigest()
+        existing_hashes.add(content_hash)
+
+    # 过滤掉已存在的新闻
+    for news in state["cleaned_news"]:
+        content_str = f"{news.get('title', '')}{news.get('content', '')}"
+        content_hash = hashlib.md5(content_str.encode()).hexdigest()
+
+        if content_hash in existing_hashes:
+            skipped_count += 1
+        else:
+            new_news.append(news)
+
+    if skipped_count > 0:
+        logger.info(f"跳过 {skipped_count} 条已存在的新闻，只分析 {len(new_news)} 条新新闻")
+
+    if not new_news:
+        logger.info("没有新新闻需要分析")
+        # 所有新闻都已存在，返回空列表（避免重复分析）
+        return {**state, "enriched_news": []}
+
     try:
         from src.processors.analyzer import HeavyAnalyzer
         analyzer = HeavyAnalyzer()
-        enriched = analyzer.analyze(state["cleaned_news"])
+        enriched = analyzer.analyze(new_news)
         logger.info(f"✓ 深度分析完成，保留 {len(enriched)} 条")
 
         # 打印统计信息
@@ -116,7 +151,7 @@ def analyze_node(state: ReportState) -> ReportState:
                 'event_subtype': '',
                 'related_stocks': {'direct': [], 'indirect': [], 'concepts': []}
             }
-            for news in state["cleaned_news"]
+            for news in new_news  # 只对新新闻添加默认字段
         ]
         return {**state, "enriched_news": fallback}
 
