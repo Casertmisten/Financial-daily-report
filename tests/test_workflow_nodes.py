@@ -12,6 +12,7 @@ from src.workflow.nodes import (
     vectorize_node,
     rag_node,
     _format_news,
+    _format_news_enriched,
     _format_market,
     pre_market_generate_node,
     mid_close_generate_node,
@@ -315,3 +316,62 @@ def test_analyze_node_failure_fallback():
     assert 'enriched_news' in result
     assert len(result['enriched_news']) == 1
     assert result['enriched_news'][0]['event_type'] == '其他'
+
+
+def test_format_news_enriched():
+    """测试格式化增强后的新闻"""
+    from src.workflow.nodes import _format_news_enriched
+
+    enriched_news = [
+        {
+            'title': '[3条新闻] 600519.SH:贵州茅台',
+            'event_type': '财报类',
+            'sentiment': 'positive',
+            'importance': 5,
+            'related_stocks': {
+                'direct': ['600519.SH:贵州茅台'],
+                'concepts': ['白酒概念', '消费龙头']
+            }
+        }
+    ]
+
+    result = _format_news_enriched(enriched_news, focus="analysis")
+
+    assert '[财报类]' in result
+    assert '📈' in result
+    assert '600519.SH:贵州茅台' in result
+    assert '重要性: 5/5' in result
+    assert '白酒概念' in result
+
+
+def test_format_news_enriched_empty():
+    """测试格式化空新闻列表"""
+    from src.workflow.nodes import _format_news_enriched
+
+    result = _format_news_enriched([])
+
+    assert result == "暂无新闻数据"
+
+
+def test_format_news_enriched_respects_limit():
+    """测试格式化遵守数量限制"""
+    from src.workflow.nodes import _format_news_enriched
+
+    # 创建 25 条新闻
+    enriched_news = [
+        {
+            'title': f'新闻{i}',
+            'event_type': '其他',
+            'sentiment': 'neutral',
+            'importance': 3,
+            'related_stocks': {'direct': [], 'concepts': []}
+        }
+        for i in range(25)
+    ]
+
+    result = _format_news_enriched(enriched_news, focus="analysis")
+    lines = result.split('\n')
+
+    # focus="analysis" 应该限制为 20 条
+    # 每条新闻 2 行（标题行 + 重要性行）
+    assert len([l for l in lines if l.startswith('-')]) <= 20

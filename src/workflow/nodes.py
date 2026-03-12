@@ -248,6 +248,52 @@ def _format_news(news_data: List[Dict], focus: str = "analysis") -> str:
     return "\n".join(formatted)
 
 
+def _format_news_enriched(news_data: List[Dict], focus: str = "analysis") -> str:
+    """
+    格式化增强后的新闻数据（包含事件类型和标的）
+
+    Args:
+        news_data: enriched_news 列表
+        focus: 关注点，决定显示的新闻数量
+
+    Returns:
+        格式化的新闻文本，包含事件和标的信息
+    """
+    if not news_data:
+        return "暂无新闻数据"
+
+    formatted = []
+    limit = 20 if focus == "analysis" else 15
+
+    for item in news_data[:limit]:
+        title = item.get('title', '')
+        event_type = item.get('event_type', '其他')
+        sentiment = item.get('sentiment', 'neutral')
+        importance = item.get('importance', 3)
+
+        # 标的信息
+        stocks = item.get('related_stocks', {})
+        direct = stocks.get('direct', [])
+        concepts = stocks.get('concepts', [])
+
+        # 情感图标
+        sentiment_icon = {'positive': '📈', 'neutral': '➡️', 'negative': '📉'}
+
+        # 构建格式化输出
+        stock_info = ''
+        if direct:
+            stock_info = f" [{', '.join(direct)}]"
+
+        line = f"- [{event_type}]{sentiment_icon.get(sentiment, '')} {title}{stock_info}"
+        formatted.append(line)
+        formatted.append(f"  重要性: {importance}/5")
+
+        if concepts:
+            formatted.append(f"  相关概念: {', '.join(concepts[:3])}")
+
+    return '\n'.join(formatted)
+
+
 def _format_market(market_data: Dict, focus: str = "deep") -> str:
     """格式化市场数据
 
