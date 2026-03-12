@@ -275,6 +275,123 @@ class LLMClient:
 
         return results
 
+    def analyze(
+        self,
+        text: str,
+        model: Optional[str] = None,
+        temperature: float = 0.3,
+        **kwargs
+    ) -> Dict:
+        """
+        深度分析接口，提取事件类型和标的关联
+
+        Args:
+            text: 待分析的文本，格式：标题 + 内容
+            model: 使用的模型，默认使用 clean_model
+            temperature: 温度参数，使用较低温度保证稳定性
+
+        Returns:
+            分析结果字典：
+            {
+                "event_type": "事件类型（从预定义列表选择）",
+                "event_subtype": "具体子类型",
+                "related_stocks": {
+                    "direct": ["代码:名称", ...],
+                    "indirect": ["行业", ...],
+                    "concepts": ["概念", ...]
+                }
+            }
+        """
+        model = model or self.clean_model
+
+        system_prompt = """你是专业的金融新闻分析助手。请分析以下新闻，提取事件类型和关联标的。
+
+## 预定义事件类型
+- 财报类：业绩预告、财报发布、业绩修正、分红预案、送转方案
+- 重组并购类：收购、兼并、资产重组、股权转让、借壳上市
+- 政策影响类：行业政策、监管变化、税收政策、产业规划、地方政策
+- 经营类：重大合同、产品发布、产能扩张、战略合作、业务调整
+- 风险类：诉讼、处罚、停产、退市风险、债务违约
+- 其他：高管变更、股东变动、股份回购、其他
+
+## 标的关联规则
+- 直接标的：新闻明确提到的股票代码或公司名称，格式：代码:名称
+- 间接标的：通过公司所属行业推断
+- 概念标的：相关的概念板块
+
+请严格按照 JSON 格式返回：
+{
+    "event_type": "事件类型（从预定义列表中选择）",
+    "event_subtype": "具体子类型",
+    "related_stocks": {
+        "direct": ["股票代码:公司名称"],
+        "indirect": ["相关行业"],
+        "concepts": ["相关概念板块"]
+    }
+}"""
+
+        try:
+            response = self.client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": text}
+                ],
+                temperature=temperature,
+                response_format={"type": "json_object"}
+            )
+            result = json.loads(response.choices[0].message.content)
+
+            # 验证和修正结果
+            result = self._validate_analysis_result(result)
+            logger.debug(f"LLM analyze 成功")
+            return result
+
+        except json.JSONDecodeError as e:
+            logger.error(f"LLM analyze JSON 解析失败: {e}")
+            return self._get_default_analysis_result()
+        except Exception as e:
+            logger.error(f"LLM analyze 失败: {e}")
+            return self._get_default_analysis_result()
+
+    def _validate_analysis_result(self, result: Dict) -> Dict:
+        """验证和修正分析结果"""
+        valid_event_types = [
+            '财报类', '重组并购类', '政策影响类',
+            '经营类', '风险类', '其他'
+        ]
+
+        # 验证事件类型
+        if result.get('event_type') not in valid_event_types:
+            logger.warning(f"无效事件类型 '{result.get('event_type')}'，使用默认值 '其他'")
+            result['event_type'] = '其他'
+
+        # 验证 related_stocks 结构
+        if 'related_stocks' not in result:
+            result['related_stocks'] = {}
+
+        stocks = result['related_stocks']
+        for key in ['direct', 'indirect', 'concepts']:
+            if key not in stocks:
+                stocks[key] = []
+            if not isinstance(stocks[key], list):
+                logger.warning(f"related_stocks.{key} 应为列表，已修正")
+                stocks[key] = []
+
+        return result
+
+    def _get_default_analysis_result(self) -> Dict:
+        """返回默认的分析结果"""
+        return {
+            "event_type": "其他",
+            "event_subtype": "",
+            "related_stocks": {
+                "direct": [],
+                "indirect": [],
+                "concepts": []
+            }
+        }
+
 
 # 全局LLM客户端实例
 llm_client = LLMClient()
