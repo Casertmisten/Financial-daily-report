@@ -15,10 +15,14 @@
 financial-daily-report/
 ├── src/                    # 源代码目录
 │   ├── main.py            # 主程序入口
-│   ├── collector/         # 数据采集模块
-│   ├── cleaner/           # 数据清洗模块
-│   ├── generator/         # 日报生成模块
-│   └── scheduler/         # 定时调度模块
+│   ├── collectors/        # 数据采集模块
+│   ├── processors/        # 数据清洗模块
+│   ├── generators/        # LLM和日报生成模块
+│   ├── rag/               # RAG检索模块
+│   ├── storage/           # 数据存储模块
+│   ├── scheduler/         # 定时调度模块
+│   └── utils/             # 工具模块
+├── config/                # 配置文件目录
 ├── data/                  # 数据存储目录
 ├── outputs/               # 生成报告输出目录
 ├── docs/                  # 文档目录
@@ -60,7 +64,10 @@ uv sync
 cp .env.example .env
 # 编辑 .env 填入你的API密钥和配置
 
-# 4. 运行程序
+# 4. 立即生成日报测试
+uv run python src/main.py run
+
+# 5. 启动定时调度
 uv run python src/main.py
 ```
 
@@ -87,31 +94,82 @@ uv run python src/main.py
 ### 日志配置
 - `LOG_LEVEL`: 日志级别（DEBUG/INFO/WARNING/ERROR）
 
-## 定时任务
+## 使用方法
 
-系统会在以下时间自动生成并发布报告：
+### 立即生成日报
 
-- **开盘前 8:30**：财经早餐
-  - 盘前要闻回顾
-  - 重要公告汇总
-  - 市场预期分析
+```bash
+# 生成收盘日报
+uv run python src/main.py run
 
-- **中午收盘 11:30**：午间快讯
-  - 上午市场动态
-  - 热点板块追踪
-  - 资金流向分析
+# 生成开盘前日报
+uv run python src/main.py run pre_market
 
-- **晚间收盘 15:30**：收盘总结
-  - 全日市场综述
-  - 涨跌停统计
-  - 后市展望
+# 生成午间日报
+uv run python src/main.py run mid_close
+```
+
+### 启动定时任务
+
+```bash
+uv run python src/main.py
+```
+
+定时任务会在以下时间自动执行：
+- 开盘前 8:30
+- 中午收盘 11:30
+- 晚间收盘 15:30
+
+## 输出
+
+日报保存在 `outputs/` 目录，格式为 `YYYY-MM-DD_{type}.md`
+
+## 测试
+
+```bash
+# 运行所有测试
+uv run pytest
+
+# 运行单元测试
+uv run pytest tests/unit/
+
+# 运行集成测试
+uv run pytest tests/integration/
+
+# 运行特定测试
+uv run pytest tests/unit/test_embeddings.py -v
+```
+
+## 架构说明
+
+系统采用模块化架构，主要包含以下模块：
+
+1. **数据采集模块** (`src/collectors/`)
+   - 新闻采集器：从多个财经网站采集新闻
+   - 市场数据采集器：采集股市行情和资金流向数据
+
+2. **数据清洗模块** (`src/processors/`)
+   - 规则清洗器：基于规则的文本清洗和去重
+   - LLM清洗器：使用LLM进行智能清洗和实体提取
+
+3. **RAG模块** (`src/rag/`)
+   - 向量存储：基于ChromaDB的文档向量存储
+   - 嵌入生成器：将文本转换为向量
+   - RAG检索器：检索相关历史文档作为上下文
+
+4. **报告生成模块** (`src/generators/`)
+   - LLM客户端：统一的LLM调用接口
+   - 日报生成器：生成结构化的金融日报
+
+5. **存储模块** (`src/storage/`)
+   - 数据库：SQLite数据库存储新闻和报告
+
+6. **调度模块** (`src/scheduler/`)
+   - 定时调度器：基于APScheduler的定时任务
 
 ## 开发
 
 ```bash
-# 运行测试
-uv run pytest
-
 # 添加新依赖
 uv add <package-name>
 
