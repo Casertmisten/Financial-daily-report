@@ -1,7 +1,8 @@
+import adata
 import akshare as ak
 from loguru import logger
 from src.collectors.base import BaseCollector
-from typing import Dict, List
+from typing import Dict
 
 class MarketCollector(BaseCollector):
     def __init__(self):
@@ -9,20 +10,29 @@ class MarketCollector(BaseCollector):
 
     def collect(self) -> Dict:
         result = {
-            'stocks': [],
+            'indices': [],
             'industry_flow': [],
             'concept_flow': [],
             'main_flow': [],
             'lhb': []
         }
 
-        # 沪深京A股实时行情
-        try:
-            df = ak.stock_zh_a_spot_em()
-            result['stocks'] = df.to_dict('records')[:100]  # 限制前100条
-            logger.info(f"A股行情: 获取 {len(df)} 条")
-        except Exception as e:
-            logger.warning(f"A股行情采集失败: {e}")
+        # 获取三大指数行情（上证、深证、创业板）
+        index_codes = {
+            '000001': '上证指数',
+            '399001': '深证成指',
+            '399006': '创业板指'
+        }
+        for code, name in index_codes.items():
+            try:
+                df = adata.stock.market.get_market_index(index_code=code)
+                if df is not None and not df.empty:
+                    # 添加指数名称
+                    df['index_name'] = name
+                    result['indices'].append(df.to_dict('records')[0])
+                    logger.info(f"{name}({code}): 获取成功")
+            except Exception as e:
+                logger.warning(f"{name}({code}) 采集失败: {e}")
 
         # 行业资金流
         try:
@@ -41,12 +51,12 @@ class MarketCollector(BaseCollector):
             logger.warning(f"概念资金流采集失败: {e}")
 
         # 主力资金流
-        try:
-            df = ak.stock_main_fund_flow(symbol="全部股票")
-            result['main_flow'] = df.to_dict('records')[:50]  # 限制前50条
-            logger.info(f"主力资金流: 获取 {len(df)} 条")
-        except Exception as e:
-            logger.warning(f"主力资金流采集失败: {e}")
+        # try:
+        #     df = ak.stock_main_fund_flow(symbol="全部股票")
+        #     result['main_flow'] = df.to_dict('records')[:50]  # 限制前50条
+        #     logger.info(f"主力资金流: 获取 {len(df)} 条")
+        # except Exception as e:
+        #     logger.warning(f"主力资金流采集失败: {e}")
 
         # 龙虎榜（获取最近一天）
         try:
