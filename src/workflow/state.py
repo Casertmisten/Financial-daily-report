@@ -11,6 +11,7 @@ class ReportState(TypedDict):
     news_data: List[Dict]
     market_data: Dict
     cleaned_news: List[Dict]
+    enriched_news: List[Dict]   # 新增：包含事件类型和标的关联的新闻
     context: str
     report: str
     errors: List[str]
