@@ -17,3 +17,29 @@ def test_rule_cleaner_normalizes_time():
     ]
     result = cleaner.clean(news)
     assert 'time' in result[0]
+
+from unittest.mock import Mock, patch
+
+def test_llm_cleaner_extracts_entities(monkeypatch):
+    # Mock LLM response
+    mock_response = {
+        "cleaned_content": "贵州茅台发布年报",
+        "entities": ["贵州茅台"],
+        "sentiment": "neutral",
+        "importance": 3,
+        "tags": ["白酒"],
+        "is_trash": False
+    }
+
+    mock_client = Mock()
+    mock_client.clean.return_value = mock_response
+
+    from src.processors.cleaner import LLMCleaner
+    cleaner = LLMCleaner()
+    cleaner.llm_client = mock_client
+
+    news = [{'title': '贵州茅台', 'content': '发布年报'}]
+    result = cleaner.clean(news)
+
+    assert len(result) == 1
+    assert result[0]['entities'] == ["贵州茅台"]
