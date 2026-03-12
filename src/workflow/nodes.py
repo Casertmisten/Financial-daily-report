@@ -61,19 +61,12 @@ def clean_node(state: ReportState) -> ReportState:
     rule_cleaner = RuleCleaner()
     cleaned = rule_cleaner.clean(state["news_data"])
 
-    # 智能跳过LLM清洗：当新闻数量过多时，跳过LLM清洗以节省时间和token
-    LLM_CLEAN_LIMIT = 50  # 最多LLM清洗50条新闻
-
-    if cleaned and len(cleaned) <= LLM_CLEAN_LIMIT:
+    if cleaned:
         try:
             llm_cleaner = LLMCleaner()
             cleaned = llm_cleaner.clean(cleaned)
-            logger.info(f"LLM智能清洗完成")
         except Exception as e:
             logger.warning(f"LLM清洗失败，使用规则清洗结果: {e}")
-    elif cleaned and len(cleaned) > LLM_CLEAN_LIMIT:
-        logger.info(f"新闻数量过多 ({len(cleaned)} 条 > {LLM_CLEAN_LIMIT} 条)，跳过LLM清洗以提升性能")
-        logger.info(f"提示：规则清洗已完成，新闻可直接用于深度分析")
 
     logger.info(f"✓ 清洗完成，保留 {len(cleaned)} 条")
 
