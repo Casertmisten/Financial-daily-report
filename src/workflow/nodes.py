@@ -350,7 +350,9 @@ def pre_market_generate_node(state: ReportState) -> ReportState:
     """
     logger.info("=== 生成盘前早报 ===")
 
-    news_summary = _format_news(state["cleaned_news"], focus="prediction")
+    # Use enriched_news if available, otherwise fall back to cleaned_news
+    news_data = state.get("enriched_news") or state.get("cleaned_news", [])
+    news_summary = _format_news_enriched(news_data, focus="prediction")
     market_summary = _format_market(state["market_data"], focus="pre_market")
 
     # 使用当前时间
@@ -389,7 +391,9 @@ def mid_close_generate_node(state: ReportState) -> ReportState:
     """
     logger.info("=== 生成盘中快讯 ===")
 
-    news_summary = _format_news(state["cleaned_news"], focus="intraday")
+    # Use enriched_news if available, otherwise fall back to cleaned_news
+    news_data = state.get("enriched_news") or state.get("cleaned_news", [])
+    news_summary = _format_news_enriched(news_data, focus="intraday")
     market_summary = _format_market(state["market_data"], focus="realtime")
 
     # 使用当前时间
@@ -428,7 +432,9 @@ def after_close_generate_node(state: ReportState) -> ReportState:
     """
     logger.info("=== 生成盘后总结 ===")
 
-    news_summary = _format_news(state["cleaned_news"], focus="analysis")
+    # Use enriched_news if available, otherwise fall back to cleaned_news
+    news_data = state.get("enriched_news") or state.get("cleaned_news", [])
+    news_summary = _format_news_enriched(news_data, focus="analysis")
     market_summary = _format_market(state["market_data"], focus="deep")
 
     # 使用当前时间
