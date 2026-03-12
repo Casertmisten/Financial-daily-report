@@ -59,5 +59,8 @@ class MarketCollector(BaseCollector):
         except Exception as e:
             logger.warning(f"龙虎榜采集失败: {e}")
 
-        logger.success(f"市场数据采集完成")
+        # 统计成功采集的数据
+        success_count = sum(1 for v in result.values() if v)
+        logger.success(f"市场数据采集完成 (成功: {success_count}/5)")
+
         return result

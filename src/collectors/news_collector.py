@@ -8,6 +8,7 @@ from loguru import logger
 
 from src.collectors.base import BaseCollector
 from src.utils.exceptions import DataCollectionError
+from src.utils.retry import retry_on_failure
 
 
 class NewsCollector(BaseCollector):
@@ -33,8 +34,9 @@ class NewsCollector(BaseCollector):
             A list of news items, where each item is a dictionary containing
             news data with keys like 'title', 'content', 'time', etc.
 
-        Raises:
-            DataCollectionError: If all data sources fail.
+        Note:
+            If all sources fail, returns empty list instead of raising exception.
+            This allows the system to generate a simple report even without data.
         """
         all_news = []
 
@@ -57,9 +59,10 @@ class NewsCollector(BaseCollector):
         self._collect_from_global_cls(all_news)
 
         if not all_news:
-            raise DataCollectionError(f"All news sources failed for {self.name}")
+            logger.warning("所有新闻源采集失败，将生成空日报")
+            return []
 
-        logger.info(f"Collected {len(all_news)} news items from all sources")
+        logger.info(f"✓ 新闻采集完成，共获取 {len(all_news)} 条")
         return all_news
 
     def _collect_from_cjzc_em(self, all_news: list[dict]) -> None:

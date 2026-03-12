@@ -57,53 +57,67 @@ def generate_daily_report(report_type: str = "after_close") -> str:
             news_data = news_collector.collect()
             market_data = market_collector.collect()
 
-            if not news_data:
-                logger.warning("未采集到任何新闻数据")
+            # 检查数据采集结果
+            news_count = len(news_data)
+            market_count = sum(1 for v in market_data.values() if v)
+
+            if news_count == 0 and market_count == 0:
+                logger.warning("⚠️ 数据采集完全失败，将生成基础报告框架")
+            else:
+                logger.info(f"✓ 数据采集完成 (新闻: {news_count}条, 市场: {market_count}/5项)")
         except Exception as e:
             logger.error(f"数据采集失败: {e}")
-            raise DataCollectionError(f"数据采集失败: {e}") from e
+            # 不再抛出异常，而是使用空数据继续
+            news_data = []
+            market_data = {}
 
         # 2. 规则清洗
         logger.info("=== 步骤2: 规则清洗 ===")
         rule_cleaner = RuleCleaner()
         news_data = rule_cleaner.clean(news_data)
 
-        # 3. LLM智能清洗（可选）
+        # 3. LLM智能清洗（跳过如果没有新闻）
         logger.info("=== 步骤3: LLM智能清洗 ===")
-        try:
-            llm_cleaner = LLMCleaner()
-            news_data = llm_cleaner.clean(news_data)
-        except Exception as e:
-            logger.warning(f"LLM清洗失败，使用规则清洗结果: {e}")
+        if news_data:
+            try:
+                llm_cleaner = LLMCleaner()
+                news_data = llm_cleaner.clean(news_data)
+                logger.info(f"✓ LLM清洗完成，保留 {len(news_data)} 条有效新闻")
+            except Exception as e:
+                logger.warning(f"LLM清洗失败，使用规则清洗结果: {e}")
 
         # 4. 存储新闻到SQLite
         logger.info("=== 步骤4: 存储新闻 ===")
         try:
-            database.save_news(news_data)
+            if news_data:
+                database.save_news(news_data)
+                logger.info(f"✓ 保存 {len(news_data)} 条新闻到数据库")
         except Exception as e:
             logger.warning(f"新闻存储失败: {e}")
 
         # 5. 向量化并存储到Chroma
         logger.info("=== 步骤5: 向量化存储 ===")
         try:
-            docs = []
-            for item in news_data:
-                # 生成唯一ID
-                content_str = f"{item['title']}_{item.get('content', '')}"
-                doc_id = hashlib.md5(content_str.encode()).hexdigest()
+            if news_data:
+                docs = []
+                for item in news_data:
+                    # 生成唯一ID
+                    content_str = f"{item['title']}_{item.get('content', '')}"
+                    doc_id = hashlib.md5(content_str.encode()).hexdigest()
 
-                docs.append({
-                    'id': doc_id,
-                    'text': f"{item['title']}\n{item.get('cleaned_content', item.get('content', ''))}",
-                    'metadata': {
-                        'source': item.get('source', ''),
-                        'time': item.get('time', ''),
-                        'title': item['title']
-                    }
-                })
+                    docs.append({
+                        'id': doc_id,
+                        'text': f"{item['title']}\n{item.get('cleaned_content', item.get('content', ''))}",
+                        'metadata': {
+                            'source': item.get('source', ''),
+                            'time': item.get('time', ''),
+                            'title': item['title']
+                        }
+                    })
 
-            if docs:
-                vector_store.add_documents(docs)
+                if docs:
+                    vector_store.add_documents(docs)
+                    logger.info(f"✓ 向量化存储 {len(docs)} 条文档")
         except Exception as e:
             logger.warning(f"向量存储失败: {e}")
 
@@ -115,8 +129,9 @@ def generate_daily_report(report_type: str = "after_close") -> str:
             if news_data:
                 # 使用第一条新闻的标题作为查询
                 context = rag_retriever.retrieve(news_data[0]['title'])
+                logger.info("✓ RAG检索完成")
         except Exception as e:
-            logger.warning(f"RAG检索失败: {e}")
+            logger.warning(f"RAG检索失败，将不使用历史参考: {e}")
 
         # 7. 生成日报
         logger.info("=== 步骤7: 生成日报 ===")
