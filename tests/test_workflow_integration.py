@@ -341,3 +341,75 @@ def test_workflow_handles_collection_errors(monkeypatch):
     # 工作流应该在数据采集失败时抛出异常
     with pytest.raises(Exception, match="网络错误"):
         result = report_graph.invoke(initial_state)
+
+
+
+
+def test_full_workflow_with_deep_analysis(monkeypatch):
+    """测试包含深度分析的完整工作流（after_close）"""
+    from unittest.mock import Mock
+    
+    # Mock 数据采集
+    mock_news = [
+        {'title': '新闻1', 'content': '内容1', 'source': 'test', 'time': '2024-01-01'},
+        {'title': '新闻2', 'content': '内容2', 'source': 'test', 'time': '2024-01-01'}
+    ]
+    
+    class MockNewsCollector:
+        def collect(self):
+            return mock_news
+    
+    class MockMarketCollector:
+        def collect(self):
+            return {}
+
+    # Mock HeavyAnalyzer 返回增强数据
+    mock_enriched = [
+        {
+            'title': '新闻1',
+            'content': '内容1',
+            'event_type': '财报类',
+            'sentiment': 'positive',
+            'importance': 5,
+            'related_stocks': {'direct': ['600519.SH:贵州茅台'], 'indirect': [], 'concepts': []},
+            'source': 'test',
+            'time': '2024-01-01'
+        }
+    ]
+    
+    class MockHeavyAnalyzer:
+        def analyze(self, news_list):
+            return mock_enriched
+
+    # Mock LLM 生成报告
+    def mock_llm_chat(messages, **kwargs):
+        return '# 测试报告\n\n内容'
+
+    # Apply monkeypatches BEFORE importing graph
+    monkeypatch.setattr('src.collectors.news_collector.NewsCollector', MockNewsCollector)
+    monkeypatch.setattr('src.collectors.market_collector.MarketCollector', MockMarketCollector)
+    monkeypatch.setattr('src.processors.analyzer.HeavyAnalyzer', MockHeavyAnalyzer)
+    monkeypatch.setattr('src.generators.llm_client.llm_client.chat', mock_llm_chat)
+    monkeypatch.setattr('src.rag.vector_store.vector_store.add_documents', lambda docs: None)
+    monkeypatch.setattr('src.storage.database.database.save_news', lambda news: None)
+    
+    # Import graph AFTER mocking
+    from src.workflow.graph import report_graph
+
+    # 执行工作流
+    result = report_graph.invoke({
+        'report_type': 'after_close',
+        'news_data': [],
+        'market_data': {},
+        'cleaned_news': [],
+        'enriched_news': [],
+        'context': '',
+        'report': '',
+        'errors': []
+    })
+
+    # 验证
+    assert 'enriched_news' in result
+    assert len(result['enriched_news']) > 0
+    assert result['enriched_news'][0]['event_type'] == '财报类'
+    assert result['report'] != ''
