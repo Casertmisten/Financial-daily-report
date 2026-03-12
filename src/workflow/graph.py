@@ -4,7 +4,7 @@ from src.workflow.state import ReportState
 from src.workflow.nodes import (
     collect_node, clean_node, store_node, vectorize_node, rag_node,
     pre_market_generate_node, mid_close_generate_node, after_close_generate_node,
-    save_node, route_by_report_type
+    save_node, route_by_report_type, analyze_node  # 新增 analyze_node
 )
 
 
@@ -15,6 +15,7 @@ def create_report_graph() -> StateGraph:
     # 添加所有节点
     builder.add_node("collect", collect_node)
     builder.add_node("clean", clean_node)
+    builder.add_node("analyze", analyze_node)
     builder.add_node("store", store_node)
     builder.add_node("vectorize", vectorize_node)
     builder.add_node("rag", rag_node)
@@ -28,7 +29,8 @@ def create_report_graph() -> StateGraph:
 
     # 构建线性流程
     builder.add_edge("collect", "clean")
-    builder.add_edge("clean", "store")
+    builder.add_edge("clean", "analyze")
+    builder.add_edge("analyze", "store")
     builder.add_edge("store", "vectorize")
     builder.add_edge("vectorize", "rag")
 
