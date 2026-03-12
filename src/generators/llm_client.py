@@ -194,6 +194,59 @@ class LLMClient:
             logger.error(f"LLM embed失败: {e}")
             raise
 
+    def test_connection(self) -> Dict[str, bool]:
+        """
+        测试LLM模型连通性
+
+        在每次调用前验证两个模型是否可用：
+        1. 生成模型 (chat_model)
+        2. 嵌入模型 (embedding_model)
+
+        Returns:
+            测试结果字典:
+            {
+                "chat_model": True/False,  # 生成模型是否连通
+                "embedding_model": True/False,  # 嵌入模型是否连通
+                "all_ok": True/False  # 全部是否连通
+            }
+        """
+        results = {
+            "chat_model": False,
+            "embedding_model": False,
+            "all_ok": False
+        }
+
+        # 测试生成模型
+        try:
+            logger.info(f"测试生成模型连通性: {self.chat_model}")
+            response = self.client.chat.completions.create(
+                model=self.chat_model,
+                messages=[{"role": "user", "content": "测试"}],
+                max_tokens=10
+            )
+            if response.choices and response.choices[0].message.content:
+                results["chat_model"] = True
+                logger.success(f"✓ 生成模型连通: {self.chat_model}")
+        except Exception as e:
+            logger.error(f"✗ 生成模型连接失败: {self.chat_model} - {e}")
+
+        # 测试嵌入模型
+        try:
+            logger.info(f"测试嵌入模型连通性: {self.embedding_model}")
+            response = self.embedding_client.embeddings.create(
+                model=self.embedding_model,
+                input=["测试"]
+            )
+            if response.data and len(response.data) > 0:
+                results["embedding_model"] = True
+                logger.success(f"✓ 嵌入模型连通: {self.embedding_model}")
+        except Exception as e:
+            logger.error(f"✗ 嵌入模型连接失败: {self.embedding_model} - {e}")
+
+        results["all_ok"] = results["chat_model"] and results["embedding_model"]
+
+        return results
+
 
 # 全局LLM客户端实例
 llm_client = LLMClient()

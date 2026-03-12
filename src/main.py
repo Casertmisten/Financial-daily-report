@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from config.settings import config
 from src.utils.exceptions import DataCollectionError, ReportGenerationError
+from src.generators.llm_client import llm_client
 import hashlib
 
 
@@ -29,6 +30,22 @@ def generate_daily_report(report_type: str = "after_close") -> str:
         ReportGenerationError: 日报生成失败时抛出
     """
     logger.info(f"开始生成日报: {report_type}")
+
+    # 步骤0: 测试LLM连通性
+    logger.info("=== 步骤0: 测试LLM连通性 ===")
+    connection_test = llm_client.test_connection()
+
+    if not connection_test["all_ok"]:
+        logger.error("LLM连通性测试失败！")
+        if not connection_test["chat_model"]:
+            logger.error(f"生成模型不通: {config.llm.chat_model}")
+            logger.error("请检查 .env 中的 LLM_BASE_URL 和 LLM_API_KEY")
+        if not connection_test["embedding_model"]:
+            logger.error(f"嵌入模型不通: {config.embedding.embedding_model}")
+            logger.error("请检查 .env 中的 EMBEDDING_BASE_URL")
+        raise ReportGenerationError("LLM模型连通性测试失败，请检查配置")
+
+    logger.success("✓ LLM连通性测试通过")
 
     try:
         # 1. 数据采集
