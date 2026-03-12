@@ -18,6 +18,7 @@ class EmbeddingConfig:
     base_url: str
     api_key: str
     embedding_model: str
+    api_type: str = "openai"  # "openai" 或 "ollama"
 
 @dataclass
 class ScheduleConfig:
@@ -72,5 +73,6 @@ config = Config(
         base_url=os.getenv("EMBEDDING_BASE_URL", "https://api.openai.com/v1"),
         api_key=os.getenv("EMBEDDING_API_KEY", ""),
         embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-small"),
+        api_type=os.getenv("EMBEDDING_API_TYPE", "openai"),  # "openai" 或 "ollama"
     )
 )

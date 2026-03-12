@@ -32,6 +32,7 @@ class LLMClient:
         self.chat_model = chat_model or config.llm.chat_model
         self.clean_model = clean_model or config.llm.clean_model
         self.embedding_model = embedding_model or config.embedding.embedding_model
+        self.embedding_api_type = config.embedding.api_type  # "openai" 或 "ollama"
 
         # 初始化OpenAI客户端
         self.client = OpenAI(
@@ -178,15 +179,28 @@ class LLMClient:
             all_embeddings = []
             batch_size = 100
 
-            for i in range(0, len(texts), batch_size):
-                batch = texts[i:i + batch_size]
-                response = self.embedding_client.embeddings.create(
-                    model=model,
-                    input=batch,
-                    **kwargs
-                )
-                embeddings = [item.embedding for item in response.data]
-                all_embeddings.extend(embeddings)
+            if self.embedding_api_type == "ollama":
+                # Ollama API 格式：使用 prompt 参数，每次处理一个文本
+                import requests
+                for text in texts:
+                    response = requests.post(
+                        f"{config.embedding.base_url}/api/embeddings",
+                        json={"model": model, "prompt": text},
+                        **kwargs
+                    ).json()
+                    if "embedding" in response:
+                        all_embeddings.append(response["embedding"])
+            else:
+                # OpenAI 兼容格式：使用 input 参数
+                for i in range(0, len(texts), batch_size):
+                    batch = texts[i:i + batch_size]
+                    response = self.embedding_client.embeddings.create(
+                        model=model,
+                        input=batch,
+                        **kwargs
+                    )
+                    embeddings = [item.embedding for item in response.data]
+                    all_embeddings.extend(embeddings)
 
             logger.debug(f"LLM embed成功，处理 {len(texts)} 个文本，模型: {model}")
             return all_embeddings
@@ -233,13 +247,27 @@ class LLMClient:
         # 测试嵌入模型
         try:
             logger.info(f"测试嵌入模型连通性: {self.embedding_model}")
-            response = self.embedding_client.embeddings.create(
-                model=self.embedding_model,
-                input=["测试"]
-            )
-            if response.data and len(response.data) > 0:
-                results["embedding_model"] = True
-                logger.success(f"✓ 嵌入模型连通: {self.embedding_model}")
+
+            if self.embedding_api_type == "ollama":
+                # Ollama API 测试
+                import requests
+                response = requests.post(
+                    f"{config.embedding.base_url}/api/embeddings",
+                    json={"model": self.embedding_model, "prompt": "测试"},
+                    timeout=10
+                )
+                if response.status_code == 200 and "embedding" in response.json():
+                    results["embedding_model"] = True
+                    logger.success(f"✓ 嵌入模型连通: {self.embedding_model}")
+            else:
+                # OpenAI 兼容 API 测试
+                response = self.embedding_client.embeddings.create(
+                    model=self.embedding_model,
+                    input=["测试"]
+                )
+                if response.data and len(response.data) > 0:
+                    results["embedding_model"] = True
+                    logger.success(f"✓ 嵌入模型连通: {self.embedding_model}")
         except Exception as e:
             logger.error(f"✗ 嵌入模型连接失败: {self.embedding_model} - {e}")
 
