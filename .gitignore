@@ -6,3 +6,4 @@ data/
 outputs/
 *.log
 .pytest_cache/
+.worktrees/
